@@ -8,17 +8,17 @@
 		<data>
 		Yxi6d3KEBMKM+Va79qAUhorvCms=
 		</data>
+		<key>Resources/web/assets/index-CQ9XqD3x.js</key>
+		<data>
+		nbVI7O0c/ogoPWGTY8UvXr6K1Rk=
+		</data>
 		<key>Resources/web/assets/index-DrgJ2rlZ.css</key>
 		<data>
 		OduBZ4WCuKfAI73CpxdaumyXgLM=
 		</data>
-		<key>Resources/web/assets/index-RGlgiePn.js</key>
-		<data>
-		p86/zhjXzNKyxzm0GFSvekKwog8=
-		</data>
 		<key>Resources/web/index.html</key>
 		<data>
-		Wsrz1StuqE3eORBKbdELhNakbQI=
+		Uih7IEVvNGSQgr5a9BSiW/kw56s=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -30,6 +30,13 @@
 			xwU8M4QG1Zdq+SoxaTVl0EscTybg5sxWygrGF70w5/A=
 			</data>
 		</dict>
+		<key>Resources/web/assets/index-CQ9XqD3x.js</key>
+		<dict>
+			<key>hash2</key>
+			<data>
+			IcsOmzc4M+d2fHrLCBxkBUKjmmiii/sYn52sB1j8Mh0=
+			</data>
+		</dict>
 		<key>Resources/web/assets/index-DrgJ2rlZ.css</key>
 		<dict>
 			<key>hash2</key>
@@ -37,18 +44,11 @@
 			SFdIi4LH7KsgL3I1XUY3Il2BuoiRhyqwkZm/sQmrjVY=
 			</data>
 		</dict>
-		<key>Resources/web/assets/index-RGlgiePn.js</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			y3Qngok5b36KCQO8nxZbWD6filnD/9N8BjjnIsIcpxc=
-			</data>
-		</dict>
 		<key>Resources/web/index.html</key>
 		<dict>
 			<key>hash2</key>
 			<data>
-			LATvjef6uYydZlPavthCFzjB/5E+QRsdoY2NVRe3zQg=
+			qOxw6u8w9XxFuzcPuPxMj7/eLyUOfcYUgeiIp3NfMXM=
 			</data>
 		</dict>
 	</dict>

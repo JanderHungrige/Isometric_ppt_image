@@ -20,11 +20,11 @@ cp macos/Info.plist "$CONTENTS/Info.plist"
 cp -R dist/. "$RESOURCES/web/"
 
 xcrun swiftc \
-  -parse-as-library \
   -module-cache-path "$MODULE_CACHE" \
   -framework AppKit \
   -framework WebKit \
   macos/IsometricImages.swift \
+  macos/main.swift \
   -o "$MACOS/$APP_NAME"
 
 chmod +x "$MACOS/$APP_NAME"

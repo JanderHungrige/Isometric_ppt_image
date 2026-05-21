@@ -1,5 +1,4 @@
 import { useRef, useState, useEffect } from "react";
-import { toPng } from "html-to-image";
 import { Crop, Download, Info, Layers, Upload, X } from "lucide-react";
 import defaultScreenshot from "@/imports/image-1.png";
 
@@ -113,6 +112,168 @@ function cropTransparentPng(dataUrl: string, padding: number): Promise<string> {
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Could not load image for export."));
+    img.src = src;
+  });
+}
+
+function hexToRgb(hex: string) {
+  return {
+    r: parseInt(hex.slice(1, 3), 16),
+    g: parseInt(hex.slice(3, 5), 16),
+    b: parseInt(hex.slice(5, 7), 16),
+  };
+}
+
+function rgbaFromHex(hex: string, alpha: number) {
+  const { r, g, b } = hexToRgb(hex);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function roundedRectPath(ctx: CanvasRenderingContext2D, width: number, height: number, radius: number) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(-width / 2 + r, -height / 2);
+  ctx.lineTo(width / 2 - r, -height / 2);
+  ctx.quadraticCurveTo(width / 2, -height / 2, width / 2, -height / 2 + r);
+  ctx.lineTo(width / 2, height / 2 - r);
+  ctx.quadraticCurveTo(width / 2, height / 2, width / 2 - r, height / 2);
+  ctx.lineTo(-width / 2 + r, height / 2);
+  ctx.quadraticCurveTo(-width / 2, height / 2, -width / 2, height / 2 - r);
+  ctx.lineTo(-width / 2, -height / 2 + r);
+  ctx.quadraticCurveTo(-width / 2, -height / 2, -width / 2 + r, -height / 2);
+  ctx.closePath();
+}
+
+async function renderCardToPng(options: {
+  src: string;
+  width: number;
+  height: number;
+  rotX: number;
+  rotZ: number;
+  depth: number;
+  edgeColor: string;
+}) {
+  const img = await loadImage(options.src);
+  const scale = EXPORT_PIXEL_RATIO;
+  const width = options.width;
+  const height = options.height;
+  const x = options.rotX * Math.PI / 180;
+  const z = options.rotZ * Math.PI / 180;
+  const cosX = Math.cos(x);
+  const cosZ = Math.cos(z);
+  const sinZ = Math.sin(z);
+
+  const matrix = {
+    a: cosZ,
+    b: cosX * sinZ,
+    c: -sinZ,
+    d: cosX * cosZ,
+  };
+
+  const transformPoint = (px: number, py: number) => ({
+    x: matrix.a * px + matrix.c * py,
+    y: matrix.b * px + matrix.d * py,
+  });
+
+  const corners = [
+    transformPoint(-width / 2, -height / 2),
+    transformPoint(width / 2, -height / 2),
+    transformPoint(width / 2, height / 2),
+    transformPoint(-width / 2, height / 2),
+  ];
+  const depthExtent = 48 * options.depth;
+  const blurExtent = 80 * options.depth;
+  const padding = EXPORT_PADDING + depthExtent + blurExtent;
+  const minX = Math.min(...corners.map((p) => p.x), -190) - padding;
+  const maxX = Math.max(...corners.map((p) => p.x), 190 + 24 * options.depth) + padding;
+  const minY = Math.min(...corners.map((p) => p.y), -height / 2) - padding;
+  const maxY = Math.max(...corners.map((p) => p.y), height / 2 + 76 * options.depth) + padding;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil((maxX - minX) * scale);
+  canvas.height = Math.ceil((maxY - minY) * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+
+  ctx.scale(scale, scale);
+  ctx.translate(-minX, -minY);
+
+  ctx.save();
+  ctx.translate(24 * options.depth, height / 2 + 54 * options.depth);
+  ctx.scale(1.45, 0.34);
+  const groundShadow = ctx.createRadialGradient(0, 0, 0, 0, 0, 170);
+  groundShadow.addColorStop(0, rgbaFromHex(options.edgeColor, 0.34));
+  groundShadow.addColorStop(0.46, rgbaFromHex(options.edgeColor, 0.18));
+  groundShadow.addColorStop(1, rgbaFromHex(options.edgeColor, 0));
+  ctx.fillStyle = groundShadow;
+  ctx.beginPath();
+  ctx.arc(0, 0, 170, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  const depthLayers = [
+    { offset: 20, alpha: 0.08 },
+    { offset: 16, alpha: 0.14 },
+    { offset: 12, alpha: 0.20 },
+    { offset: 8, alpha: 0.28 },
+    { offset: 4, alpha: 0.35 },
+  ];
+
+  for (const layer of depthLayers) {
+    ctx.save();
+    ctx.translate(layer.offset * options.depth, layer.offset * options.depth);
+    ctx.transform(matrix.a, matrix.b, matrix.c, matrix.d, 0, 0);
+    roundedRectPath(ctx, width, height, 14);
+    ctx.fillStyle = rgbaFromHex(options.edgeColor, layer.alpha);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
+  ctx.translate(30 * options.depth, 44 * options.depth);
+  ctx.scale(1.1, 0.52);
+  const castShadow = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(width, height) * 0.72);
+  castShadow.addColorStop(0, rgbaFromHex(options.edgeColor, 0.20));
+  castShadow.addColorStop(0.52, rgbaFromHex(options.edgeColor, 0.09));
+  castShadow.addColorStop(1, rgbaFromHex(options.edgeColor, 0));
+  ctx.fillStyle = castShadow;
+  ctx.beginPath();
+  ctx.arc(0, 0, Math.max(width, height) * 0.72, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.transform(matrix.a, matrix.b, matrix.c, matrix.d, 0, 0);
+  roundedRectPath(ctx, width, height, 14);
+  ctx.clip();
+
+  const imgRatio = img.naturalWidth / img.naturalHeight;
+  const targetRatio = width / height;
+  let drawWidth = width;
+  let drawHeight = height;
+  if (imgRatio > targetRatio) {
+    drawWidth = height * imgRatio;
+  } else {
+    drawHeight = width / imgRatio;
+  }
+  ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+
+  const glare = ctx.createLinearGradient(-width / 2, -height / 2, width / 2, height / 2);
+  glare.addColorStop(0, "rgba(255,255,255,0.10)");
+  glare.addColorStop(0.3, "rgba(255,255,255,0.04)");
+  glare.addColorStop(0.6, "rgba(255,255,255,0)");
+  ctx.fillStyle = glare;
+  ctx.fillRect(-width / 2, -height / 2, width, height);
+  ctx.restore();
+
+  return cropTransparentPng(canvas.toDataURL("image/png"), EXPORT_PADDING * scale);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -238,21 +399,15 @@ export default function App() {
 
   // ── download ──────────────────────────────────────────────────────────────
   const handleDownload = async () => {
-    if (!canvasRef.current) return;
-    const el = canvasRef.current;
-    const prev = el.style.cssText;
-    el.classList.add("is-exporting");
-    el.style.cssText = prev + "; background: transparent !important;";
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    const fullDataUrl = await toPng(el, {
-      cacheBust: true,
-      pixelRatio: EXPORT_PIXEL_RATIO,
-      backgroundColor: "transparent",
-      filter: (node) => !(node instanceof HTMLElement && node.dataset.exportIgnore === "true"),
+    const dataUrl = await renderCardToPng({
+      src,
+      width: CARD_WIDTH,
+      height,
+      rotX,
+      rotZ,
+      depth,
+      edgeColor,
     });
-    const dataUrl = await cropTransparentPng(fullDataUrl, EXPORT_PADDING * EXPORT_PIXEL_RATIO);
-    el.classList.remove("is-exporting");
-    el.style.cssText = prev;
     const nativeSave = (window as any).webkit?.messageHandlers?.saveImage;
     if (nativeSave) {
       nativeSave.postMessage({ filename: "isometric-preview.png", dataUrl });
