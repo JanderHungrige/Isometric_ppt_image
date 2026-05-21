@@ -1,11 +1,12 @@
 
-  # Create Isometric 3D View
+# Create Isometric 3D View
 
-  This is a code bundle for Create Isometric 3D View. The original project is available at https://www.figma.com/design/XgbcjpwmDseklXUYunNj61/Create-Isometric-3D-View.
+![Isometric 3D View Preview](images/preview.png)
 
-  ## Running the code
+This is a code bundle for Create Isometric 3D View. The original project is available at https://www.figma.com/design/XgbcjpwmDseklXUYunNj61/Create-Isometric-3D-View.
 
-  Run `npm i` to install the dependencies.
+## Running the code
 
-  Run `npm run dev` to start the development server.
-  
+Run `npm i` to install the dependencies.
+
+Run `npm run dev` to start the development server.
