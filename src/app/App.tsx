@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { toPng } from "html-to-image";
-import { Crop, Download, Upload, Layers } from "lucide-react";
+import { Crop, Download, Info, Layers, Upload, X } from "lucide-react";
 import defaultScreenshot from "@/imports/image-1.png";
 
 const CARD_WIDTH = 580;
@@ -161,6 +161,7 @@ export default function App() {
 
   // ── file drop ─────────────────────────────────────────────────────────────
   const [isFileDrop, setIsFileDrop] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
 
   // ─────────────────────────────────────────────────────────────────────────
   // COMPARE TOGGLE
@@ -252,6 +253,11 @@ export default function App() {
     const dataUrl = await cropTransparentPng(fullDataUrl, EXPORT_PADDING * EXPORT_PIXEL_RATIO);
     el.classList.remove("is-exporting");
     el.style.cssText = prev;
+    const nativeSave = (window as any).webkit?.messageHandlers?.saveImage;
+    if (nativeSave) {
+      nativeSave.postMessage({ filename: "isometric-preview.png", dataUrl });
+      return;
+    }
     const link = document.createElement("a");
     link.download = "isometric-preview.png";
     link.href = dataUrl;
@@ -462,13 +468,87 @@ export default function App() {
           </div>
         </div>
 
-        {/* Save button */}
-        <button
-          onClick={handleDownload}
-          className={"absolute bottom-8 right-8 pointer-events-auto " + btn}
-        >
-          <Download size={15} /> Save PNG
-        </button>
+        <div className="absolute bottom-8 right-8 flex items-center gap-2 pointer-events-auto">
+          <button
+            onClick={() => setShowInfo(true)}
+            className="flex size-11 items-center justify-center rounded-full text-gray-700 border border-black/10 bg-white/80 backdrop-blur-md hover:bg-white hover:border-black/20 transition-all duration-200 cursor-pointer shadow-sm"
+            title="Info"
+            aria-label="Info"
+          >
+            <Info size={17} />
+          </button>
+          <button
+            onClick={handleDownload}
+            className={btn}
+          >
+            <Download size={15} /> Save PNG
+          </button>
+        </div>
+
+        {showInfo && (
+          <div className="absolute inset-0 z-[60] flex items-center justify-center bg-black/25 backdrop-blur-sm pointer-events-auto">
+            <section className="relative w-[min(720px,calc(100vw-32px))] max-h-[min(760px,calc(100vh-32px))] overflow-auto rounded-2xl border border-black/10 bg-white p-7 shadow-2xl">
+              <button
+                onClick={() => setShowInfo(false)}
+                className="absolute right-4 top-4 flex size-9 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors cursor-pointer"
+                title="Close"
+                aria-label="Close info"
+              >
+                <X size={17} />
+              </button>
+
+              <div className="pr-10">
+                <h1 className="text-2xl font-semibold text-gray-950">Isometric Images</h1>
+                <p className="mt-2 text-sm leading-6 text-gray-600">
+                  Create transparent PNG mockups from screenshots, app views, diagrams, or slides.
+                </p>
+              </div>
+
+              <div className="mt-6 grid gap-5 text-sm leading-6 text-gray-700 md:grid-cols-2">
+                <div>
+                  <h2 className="font-semibold text-gray-950">Basic flow</h2>
+                  <ol className="mt-2 list-decimal space-y-1 pl-5">
+                    <li>Drop an image on the canvas or choose Upload Image.</li>
+                    <li>Pick an aspect ratio or keep Auto.</li>
+                    <li>Adjust rotX and rotZ until the angle looks right.</li>
+                    <li>Use Save PNG to export a cropped transparent image.</li>
+                  </ol>
+                </div>
+
+                <div>
+                  <h2 className="font-semibold text-gray-950">Buttons</h2>
+                  <ul className="mt-2 space-y-1">
+                    <li><strong>Upload Image:</strong> load a PNG, JPG, or other browser-supported image.</li>
+                    <li><strong>Save Size:</strong> lock the current card height for later images.</li>
+                    <li><strong>Compare:</strong> keep the previous image as a ghost overlay.</li>
+                    <li><strong>Save PNG:</strong> export the final transparent mockup.</li>
+                  </ul>
+                </div>
+
+                <div>
+                  <h2 className="font-semibold text-gray-950">Projection</h2>
+                  <p className="mt-2">
+                    Use <strong>Parallel</strong> for PowerPoint, diagrams, and stacked images. Opposite edges stay parallel.
+                    Use <strong>Perspective</strong> for a more cinematic look with slight edge convergence.
+                  </p>
+                </div>
+
+                <div>
+                  <h2 className="font-semibold text-gray-950">Styling</h2>
+                  <p className="mt-2">
+                    BG changes the canvas preview background. Custom opens color pickers. Depth controls the edge color and
+                    thickness shadow behind the card.
+                  </p>
+                </div>
+              </div>
+
+              <p className="mt-6 rounded-xl bg-gray-50 p-4 text-xs leading-5 text-gray-500">
+                Tip: for a set of images that must line up in slides, choose Parallel, set one angle, press Save Size,
+                then export each image with the same settings.
+              </p>
+            </section>
+          </div>
+        )}
       </div>
 
       <style>{`
