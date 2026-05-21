@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { toPng } from "html-to-image";
-import { Download, Upload, Layers } from "lucide-react";
+import { Crop, Download, Upload, Layers } from "lucide-react";
 import defaultScreenshot from "@/imports/image-1.png";
 
 const CARD_WIDTH = 580;
@@ -61,6 +61,7 @@ export default function App() {
   const [src,      setSrc]      = useState(defaultScreenshot);
   const [natH,     setNatH]     = useState(Math.round(CARD_WIDTH * 9 / 16));
   const [ratio,    setRatio]    = useState<RatioValue>("auto");
+  const [savedHeight, setSavedHeight] = useState<number | null>(null);
 
   // ── compare: ghost is ALWAYS set when compare mode is active ──────────────
   // compareOn=true  → ghost is shown, next upload replaces main card only
@@ -71,8 +72,8 @@ export default function App() {
   const [ghostOpacity, setGhostOpacity] = useState(0.4);
 
   // ── 3-D rotation ──────────────────────────────────────────────────────────
-  const [rotX, setRotX] = useState(45);
-  const [rotZ, setRotZ] = useState(50);
+  const [rotX, setRotX] = useState(66);
+  const [rotZ, setRotZ] = useState(57);
 
   // ── card position ─────────────────────────────────────────────────────────
   const [cardPos,    setCardPos]    = useState({ x: 0, y: 0 });
@@ -91,6 +92,7 @@ export default function App() {
 
   // ── card edge/depth colour (the layered box-shadow "thickness") ───────────
   const [edgeColor, setEdgeColor] = useState("#000000");
+  const [depth, setDepth] = useState(0.8);
 
   // ── file drop ─────────────────────────────────────────────────────────────
   const [isFileDrop, setIsFileDrop] = useState(false);
@@ -111,6 +113,10 @@ export default function App() {
     }
   }
 
+  function handleToggleSavedSize() {
+    setSavedHeight((current) => current === null ? calcHeight(ratio, natH) : null);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // LOAD NEW IMAGE
   // This is called AFTER the user picks a file. Compare state is already
@@ -119,9 +125,12 @@ export default function App() {
   // ─────────────────────────────────────────────────────────────────────────
   async function handleNewImage(file: File) {
     if (!file.type.startsWith("image/")) return;
+    if (compareOn) {
+      setGhostSrc(src);
+      setGhostNatH(natH);
+    }
     const newSrc  = await readFile(file);
     const newNatH = await measureImage(newSrc);
-    // Always just update the main card — ghost is only updated by toggleCompare
     setSrc(newSrc);
     setNatH(newNatH);
     setRatio("auto");
@@ -165,12 +174,15 @@ export default function App() {
   const handleDownload = async () => {
     if (!canvasRef.current) return;
     const el = canvasRef.current;
-    if (uiRef.current) uiRef.current.style.visibility = "hidden";
     const prev = el.style.cssText;
     el.style.cssText = prev + "; background: transparent !important;";
-    const dataUrl = await toPng(el, { cacheBust: true, pixelRatio: 2, backgroundColor: "transparent" });
+    const dataUrl = await toPng(el, {
+      cacheBust: true,
+      pixelRatio: 2,
+      backgroundColor: "transparent",
+      filter: (node) => !(node instanceof HTMLElement && node.dataset.exportIgnore === "true"),
+    });
     el.style.cssText = prev;
-    if (uiRef.current) uiRef.current.style.visibility = "";
     const link = document.createElement("a");
     link.download = "isometric-preview.png";
     link.href = dataUrl;
@@ -178,8 +190,8 @@ export default function App() {
   };
 
   // ── derived ───────────────────────────────────────────────────────────────
-  const height      = calcHeight(ratio, natH);
-  const ghostHeight = calcHeight("auto", ghostNatH);
+  const height      = savedHeight ?? calcHeight(ratio, natH);
+  const ghostHeight = savedHeight ?? calcHeight("auto", ghostNatH);
   const tx  = `rotateX(${rotX}deg) rotateZ(${rotZ}deg)`;
   const txH = `rotateX(${rotX}deg) rotateZ(${rotZ}deg) translateZ(12px)`;
   const bgStyle = `linear-gradient(135deg, ${activeBg.from}, ${activeBg.to})`;
@@ -195,12 +207,12 @@ export default function App() {
   const cardBoxShadow = `
     0 2px 0 rgba(255,255,255,0.08) inset,
     0 -1px 0 ${hexOpacity(ec,0.6)} inset,
-    4px 4px 0 ${hexOpacity(ec,0.35)},
-    8px 8px 0 ${hexOpacity(ec,0.28)},
-    12px 12px 0 ${hexOpacity(ec,0.20)},
-    16px 16px 0 ${hexOpacity(ec,0.14)},
-    20px 20px 0 ${hexOpacity(ec,0.08)},
-    24px 48px 80px ${hexOpacity(ec,0.9)},
+    ${4 * depth}px ${4 * depth}px 0 ${hexOpacity(ec,0.35)},
+    ${8 * depth}px ${8 * depth}px 0 ${hexOpacity(ec,0.28)},
+    ${12 * depth}px ${12 * depth}px 0 ${hexOpacity(ec,0.20)},
+    ${16 * depth}px ${16 * depth}px 0 ${hexOpacity(ec,0.14)},
+    ${20 * depth}px ${20 * depth}px 0 ${hexOpacity(ec,0.08)},
+    ${24 * depth}px ${48 * depth}px ${80 * depth}px ${hexOpacity(ec,0.9)},
     0 0 0 1px rgba(255,255,255,0.06)
   `;
 
@@ -234,7 +246,7 @@ export default function App() {
           position: "absolute", left: cardLeft, top: cardTop,
           transform: "translate(-50%,-50%)",
           perspective: "1200px", perspectiveOrigin: "50% 30%",
-          pointerEvents: "none", opacity: ghostOpacity, zIndex: 0,
+          pointerEvents: "none", opacity: ghostOpacity, zIndex: 2,
         }}>
           <div style={{
             position: "relative", width: CARD_WIDTH, height: ghostHeight,
@@ -273,7 +285,7 @@ export default function App() {
       <input ref={uploadRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
 
       {/* ── Toolbar ── */}
-      <div ref={uiRef} className="absolute inset-0 pointer-events-none">
+      <div ref={uiRef} data-export-ignore="true" className="absolute inset-0 pointer-events-none">
         <div className="absolute bottom-8 left-8 flex flex-col gap-2 pointer-events-auto">
 
           {/* Row 1: Upload + Ratio + Compare */}
@@ -289,6 +301,13 @@ export default function App() {
                 </button>
               ))}
             </div>
+
+            <button
+              className={`${btn} ${savedHeight !== null ? "text-indigo-600 border-indigo-200 bg-white" : ""}`}
+              onClick={handleToggleSavedSize}
+            >
+              <Crop size={15} /> {savedHeight === null ? "Save Size" : "Size Saved"}
+            </button>
 
             <div className={pill + " gap-2"}>
               <button
@@ -322,7 +341,7 @@ export default function App() {
                 className="w-28 accent-indigo-500 cursor-pointer" />
               <span className="w-7 tabular-nums text-right">{rotZ}°</span>
             </label>
-            <button onClick={() => { setRotX(45); setRotZ(50); }}
+            <button onClick={() => { setRotX(66); setRotZ(57); }}
               className="text-[10px] text-gray-400 hover:text-gray-700 cursor-pointer transition-colors">
               reset
             </button>
@@ -357,6 +376,10 @@ export default function App() {
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Depth</span>
             <input type="color" value={edgeColor} onChange={e => setEdgeColor(e.target.value)}
               className="w-6 h-6 rounded cursor-pointer border border-black/10" title="Card depth/edge colour" />
+            <input type="range" min={0.2} max={2.5} step={0.1} value={depth}
+              onChange={e => setDepth(Number(e.target.value))}
+              className="w-24 accent-indigo-500 cursor-pointer" title="Depth layers" />
+            <span className="w-7 tabular-nums text-right text-xs text-gray-600">{depth.toFixed(1)}</span>
           </div>
         </div>
 
