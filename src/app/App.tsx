@@ -4,6 +4,8 @@ import { Crop, Download, Upload, Layers } from "lucide-react";
 import defaultScreenshot from "@/imports/image-1.png";
 
 const CARD_WIDTH = 580;
+const EXPORT_PIXEL_RATIO = 2;
+const EXPORT_PADDING = 32;
 
 const RATIOS = [
   { label: "Auto", value: "auto" },
@@ -13,6 +15,7 @@ const RATIOS = [
   { label: "3:2",  value: "3:2"  },
 ] as const;
 type RatioValue = typeof RATIOS[number]["value"];
+type ProjectionMode = "parallel" | "perspective";
 
 function calcHeight(r: RatioValue, naturalH: number) {
   switch (r) {
@@ -51,6 +54,67 @@ function readFile(file: File): Promise<string> {
   });
 }
 
+function cropTransparentPng(dataUrl: string, padding: number): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const source = document.createElement("canvas");
+      source.width = img.width;
+      source.height = img.height;
+      const sourceCtx = source.getContext("2d");
+      if (!sourceCtx) {
+        resolve(dataUrl);
+        return;
+      }
+
+      sourceCtx.drawImage(img, 0, 0);
+      const pixels = sourceCtx.getImageData(0, 0, source.width, source.height).data;
+      let minX = source.width;
+      let minY = source.height;
+      let maxX = -1;
+      let maxY = -1;
+
+      for (let y = 0; y < source.height; y++) {
+        for (let x = 0; x < source.width; x++) {
+          const alpha = pixels[(y * source.width + x) * 4 + 3];
+          if (alpha > 2) {
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
+        }
+      }
+
+      if (maxX < minX || maxY < minY) {
+        resolve(dataUrl);
+        return;
+      }
+
+      minX = Math.max(0, minX - padding);
+      minY = Math.max(0, minY - padding);
+      maxX = Math.min(source.width - 1, maxX + padding);
+      maxY = Math.min(source.height - 1, maxY + padding);
+
+      const width = maxX - minX + 1;
+      const height = maxY - minY + 1;
+      const target = document.createElement("canvas");
+      target.width = width;
+      target.height = height;
+      const targetCtx = target.getContext("2d");
+      if (!targetCtx) {
+        resolve(dataUrl);
+        return;
+      }
+
+      targetCtx.drawImage(source, minX, minY, width, height, 0, 0, width, height);
+      resolve(target.toDataURL("image/png"));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -74,6 +138,7 @@ export default function App() {
   // ── 3-D rotation ──────────────────────────────────────────────────────────
   const [rotX, setRotX] = useState(66);
   const [rotZ, setRotZ] = useState(57);
+  const [projection, setProjection] = useState<ProjectionMode>("parallel");
 
   // ── card position ─────────────────────────────────────────────────────────
   const [cardPos,    setCardPos]    = useState({ x: 0, y: 0 });
@@ -175,13 +240,17 @@ export default function App() {
     if (!canvasRef.current) return;
     const el = canvasRef.current;
     const prev = el.style.cssText;
+    el.classList.add("is-exporting");
     el.style.cssText = prev + "; background: transparent !important;";
-    const dataUrl = await toPng(el, {
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const fullDataUrl = await toPng(el, {
       cacheBust: true,
-      pixelRatio: 2,
+      pixelRatio: EXPORT_PIXEL_RATIO,
       backgroundColor: "transparent",
       filter: (node) => !(node instanceof HTMLElement && node.dataset.exportIgnore === "true"),
     });
+    const dataUrl = await cropTransparentPng(fullDataUrl, EXPORT_PADDING * EXPORT_PIXEL_RATIO);
+    el.classList.remove("is-exporting");
     el.style.cssText = prev;
     const link = document.createElement("a");
     link.download = "isometric-preview.png";
@@ -218,6 +287,9 @@ export default function App() {
 
   const cardLeft = `calc(50% + ${cardPos.x}px)`;
   const cardTop  = `calc(50% + ${cardPos.y}px)`;
+  const projectionStyle = projection === "perspective"
+    ? { perspective: "1200px", perspectiveOrigin: "50% 30%" }
+    : {};
 
   // ── button style helpers ──────────────────────────────────────────────────
   const btn = "flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium text-gray-800 border border-black/10 bg-white/80 backdrop-blur-md hover:bg-white hover:border-black/20 transition-all duration-200 cursor-pointer shadow-sm";
@@ -245,7 +317,7 @@ export default function App() {
         <div style={{
           position: "absolute", left: cardLeft, top: cardTop,
           transform: "translate(-50%,-50%)",
-          perspective: "1200px", perspectiveOrigin: "50% 30%",
+          ...projectionStyle,
           pointerEvents: "none", opacity: ghostOpacity, zIndex: 2,
         }}>
           <div style={{
@@ -267,7 +339,7 @@ export default function App() {
         }}
         onMouseDown={onMouseDown}
       >
-        <div style={{ perspective: "1200px", perspectiveOrigin: "50% 30%" }}>
+        <div style={projectionStyle}>
           <div
             className="isometric-card"
             style={{ height, "--tx": tx, "--txh": txH, boxShadow: cardBoxShadow } as React.CSSProperties}
@@ -345,6 +417,13 @@ export default function App() {
               className="text-[10px] text-gray-400 hover:text-gray-700 cursor-pointer transition-colors">
               reset
             </button>
+            <div className="w-px h-4 bg-black/10" />
+            <button className={pillBtn(projection === "parallel")} onClick={() => setProjection("parallel")}>
+              Parallel
+            </button>
+            <button className={pillBtn(projection === "perspective")} onClick={() => setProjection("perspective")}>
+              Perspective
+            </button>
           </div>
 
           {/* Row 3: Background + Shadow colour */}
@@ -418,6 +497,10 @@ export default function App() {
           animation-play-state: paused;
           transform: var(--txh);
           transition: transform 0.4s ease, box-shadow 0.4s ease, height 0.3s ease;
+        }
+        .is-exporting .isometric-card,
+        .is-exporting .ground-shadow {
+          animation: none !important;
         }
         .screen-glare {
           position: absolute; inset: 0; z-index: 1;
